@@ -1,157 +1,143 @@
 import streamlit as st
+import streamlit_scrollable_textbox as stx
 import time
 import pandas as pd
+from io import StringIO
+import pyperclip
 
+# Initialize session state for WPM history
+if "wpm_history" not in st.session_state:
+    st.session_state["wpm_history"] = pd.DataFrame(columns=["Words Typed", "Total Time (s)", "WPM"])
 
-# Function to calculate words per minute
+# Set wide page layout
+st.set_page_config(layout="wide")
 
+# Function to compare two texts word by word and list mistakes
+def compare_texts(uploaded_text, typed_text):
+    uploaded_words = uploaded_text.split()
+    typed_words = typed_text.split()
+    
+    # Find the length of the shorter text
+    min_len = min(len(uploaded_words), len(typed_words))
+    
+    mistakes = []
+    for i in range(min_len):
+        if uploaded_words[i] != typed_words[i]:
+            mistakes.append({"Your Word": typed_words[i], "Correct Word": uploaded_words[i]})
+    
+    # If there are extra words in either text, they are considered mistakes
+    if len(uploaded_words) > min_len:
+        for word in uploaded_words[min_len:]:
+            mistakes.append({"Your Word": "", "Correct Word": word})
+    elif len(typed_words) > min_len:
+        for word in typed_words[min_len:]:
+            mistakes.append({"Your Word": word, "Correct Word": ""})
 
+    # Return the number of mistakes and the mistake details
+    return len(mistakes), pd.DataFrame(mistakes)
 
+# Custom CSS to adjust width
+st.markdown("""
+    <style>
+    .stTextArea {
+        width: 100% !important;
+    }
+    .scrollable-textbox {
+        width: 100% !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-def calculate_wpm(text, elapsed_time):
-    words = len(text.split())
-    wpm = (words / elapsed_time) * 60  # Words per minute
-    return words, wpm
+# Page Navigation
+page = st.sidebar.radio("Select Page", ["Typing Practice", "WPM History"])
+st.sidebar.markdown("""
+### Instructions:
+1. Load a `.txt` or `.docx` document.
+2. Click on "Start Typing".
+3. Type the text as shown.
+4. Click on "Finish Typing".
+                    
+### On the "WPM History"
+Check your improvments! 
 
+Copy wpm per minut column and keep track in an excel file                   
+""")
 
-# Function to count mistakes by directly comparing word by word
-
-
-
-
-def count_mistakes(original_text, typed_text):
-    original_words = original_text.split()  # Split original text into words
-    typed_words = typed_text.split()        # Split typed text into words
-
-
-    # Initialize mistake counter
-    mistakes = 0
-
-
-    # Compare each word directly
-    for i, word in enumerate(typed_words):
-        if i >= len(original_words) or word != original_words[i]:
-            mistakes += 1
-
-
-    # If there are missing words in the typed text, count them as mistakes
-    missing_words = len(original_words) - len(typed_words)
-    if missing_words > 0:
-        mistakes += missing_words
-
-
-    return mistakes
-
-
-
-
-# Initialize session state for start_time and history
-if "start_time" not in st.session_state:
-    st.session_state.start_time = None
-
-
-if "history" not in st.session_state:
-    st.session_state.history = pd.DataFrame(
-        columns=["Timestamp", "Words per Minute"])
-
-
-# App layout
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Select a page", ["Typing Practice", "Typing History"])
-
-
+# Page 1: Typing Practice
 if page == "Typing Practice":
-    st.title("Typing Practice App")
+    # Page 1: Typing Practice
+    st.markdown("<h1 style='text-align: center;'>TYPY</h1>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 1])  # Increase ratio to make col1 wider
 
+    uploaded_text = ""
+    with col1:
+        uploaded_file = st.file_uploader("Upload Text (.docx or .txt)", type=["docx", "txt"])
+        if uploaded_file:
+            if uploaded_file.type == "text/plain":
+                uploaded_text = StringIO(uploaded_file.getvalue().decode("utf-8")).read()
+            else:
+                import docx
+                doc = docx.Document(uploaded_file)
+                uploaded_text = "\n".join([para.text for para in doc.paragraphs])
+            stx.scrollableTextbox(uploaded_text, height=400, key="scroll_text")  # Adjust height
 
-    # Sidebar for uploading text
-    uploaded_file = st.sidebar.file_uploader(
-        "Upload a text file for typing practice", type=['txt'])
+    with col2:
+        if "start_time" not in st.session_state:
+            st.session_state["start_time"] = 0
 
+        if st.button("Start Typing"):
+            st.session_state["start_time"] = time.time()
 
-    if uploaded_file:
-        original_text = uploaded_file.read().decode("utf-8")
+        typed_text = st.text_area("Type here:", height=300)  # Adjust height, width is handled by CSS
 
+        if st.button("Finish Typing"):
+            end_time = time.time()
+            total_time = end_time - st.session_state["start_time"]
+            words_typed = len(typed_text.split())
+            wpm = words_typed / (total_time / 60)
+            
+            # Compare uploaded text and typed text for mistakes
+            mistakes_count, mistakes_df = compare_texts(uploaded_text, typed_text)
 
-        # Sidebar for selecting chunk size
-        chunk_size = st.sidebar.slider(
-            "Select text chunk size (words)", 10, 50, 20)
+            st.write(f"Total Words: {words_typed}")
+            st.write(f"Total Time: {total_time:.2f} seconds")
+            st.write(f"Words Per Minute (WPM): {wpm:.2f}")
+            st.write(f"Mistakes: {mistakes_count}")
 
+            if mistakes_count > 0:
+                st.write("Here are your mistakes:")
+                st.dataframe(mistakes_df)
 
-        # Form to display and write text
-        with st.form(key="typing_form"):
-            st.write("Read the following text and type it below:")
+            # Save WPM data in session state dataframe using pd.concat
+            new_data = pd.DataFrame({"Words Typed": [words_typed], "Total Time (s)": [total_time], "WPM": [wpm]})
+            st.session_state["wpm_history"] = pd.concat([st.session_state["wpm_history"], new_data], ignore_index=True)
 
+elif page == "WPM History":
+    st.markdown("<h1 style='text-align: center;'>WPM History</h1>", unsafe_allow_html=True)
+    
+    # Create two columns
+    col1, col2 = st.columns([1, 1])  # You can adjust the proportions if needed
 
-            # Split the text into chunks of words based on chunk size
-            words = original_text.split()
-            num_words = len(words)
+    # Column 1: DataFrame
+    with col1:
+        st.write("WPM History Data:")
+        st.dataframe(st.session_state["wpm_history"])
 
+        # Extract the "WPM" column
+        wpm_column = st.session_state["wpm_history"]["WPM"].round(2)
+        
+        # Convert to string format
+        wpm_column_string = wpm_column.to_csv(index=False, header=False)
 
-            # Select the chunk of text to display
-            displayed_chunk = " ".join(words[:chunk_size])
+        # Button to copy WPM column to clipboard
+        if st.button("Copy WPM Column"):
+            pyperclip.copy(wpm_column_string)  # Copy the WPM data to clipboard
+            st.success("WPM Column copied to clipboard!")  # Notify user
 
-
-            # Show the chunk of text
-            st.write(displayed_chunk)
-
-
-            # Input field for typing the text
-            typed_text = st.text_area("Type the text here:", height=200)
-
-
-            # Start button (starts timer when clicked)
-            start_button = st.form_submit_button(label="Start Typing")
-
-
-            if start_button:
-                st.session_state.start_time = time.time()  # Store start time in session state
-
-
-            # Finish button to submit typing and show results
-            finish_button = st.form_submit_button(label="Finish Typing")
-            if finish_button:
-                if st.session_state.start_time is not None:
-                    end_time = time.time()  # End time when the user finishes typing
-                    elapsed_time = end_time - st.session_state.start_time  # Total time spent
-
-
-                    # Convert elapsed time to minutes and seconds
-                    minutes = int(elapsed_time // 60)
-                    seconds = int(elapsed_time % 60)
-
-
-                    # Calculate WPM and mistakes
-                    num_words_typed, wpm = calculate_wpm(
-                        typed_text, elapsed_time)
-                    mistakes = count_mistakes(
-                        " ".join(words[:chunk_size]), typed_text)
-
-
-                    # Update history DataFrame
-                    new_entry = pd.DataFrame(
-                        {"Timestamp": [pd.Timestamp.now()], "Words per Minute": [wpm]})
-                    st.session_state.history = pd.concat(
-                        [st.session_state.history, new_entry], ignore_index=True)
-
-
-                    # Show results
-                    st.write(f"Words typed: {num_words_typed}")
-                    st.write(
-                        f"Time spent: {minutes} minutes and {seconds} seconds")
-                    st.write(f"Words per minute (WPM): {wpm:.2f}")
-                    st.write(f"Number of mistakes: {mistakes}")
-                else:
-                    st.warning(
-                        "Please start typing first by clicking the 'Start Typing' button.")
-
-
-elif page == "Typing History":
-    st.title("Typing History")
-
-
-    # Display the DataFrame
-    if not st.session_state.history.empty:
-        st.write(st.session_state.history)
-    else:
-        st.write("No typing history available.")
+    # Column 2: Line Chart
+    with col2:
+        st.write("Words Per Minute Over Time:")
+        if not st.session_state["wpm_history"].empty:
+            st.line_chart(st.session_state["wpm_history"]["WPM"])
+        else:
+            st.write("No data available to display.")
