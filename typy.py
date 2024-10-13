@@ -2,7 +2,6 @@ import streamlit as st
 import time
 import pandas as pd
 from io import StringIO
-import pyperclip
 import docx
 from streamlit.components.v1 import html
 
@@ -112,6 +111,7 @@ if page == "Typing Practice":
             new_data = pd.DataFrame({"Words Typed": [words_typed], "Total Time (s)": [total_time], "WPM": [wpm]})
             st.session_state["wpm_history"] = pd.concat([st.session_state["wpm_history"], new_data], ignore_index=True)
 
+# Page 2: WPM History
 elif page == "WPM History":
     st.markdown("<h1 style='text-align: center;'>WPM History</h1>", unsafe_allow_html=True)
     
@@ -131,8 +131,15 @@ elif page == "WPM History":
 
         # Button to copy WPM column to clipboard
         if st.button("Copy WPM Column"):
-            pyperclip.copy(wpm_column_string)  # Copy the WPM data to clipboard
-            st.success("WPM Column copied to clipboard!")  # Notify user
+            # Create a simple HTML and JavaScript snippet
+            js_code = f"""
+            <script>
+            navigator.clipboard.writeText(`{wpm_column_string}`);
+            alert('WPM Column copied to clipboard!');
+            </script>
+            """
+            # Use Streamlit's HTML component to execute the JS
+            html(js_code)
 
     # Column 2: Line Chart
     with col2:
