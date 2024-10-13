@@ -2,3 +2,4 @@ streamlit
 streamlit-scrollable-textbox
 pandas
 pyperclip
+distutils
