@@ -1,9 +1,10 @@
 import streamlit as st
-import streamlit_scrollable_textbox as stx
 import time
 import pandas as pd
 from io import StringIO
 import pyperclip
+import docx
+from streamlit.components.v1 import html
 
 # Initialize session state for WPM history
 if "wpm_history" not in st.session_state:
@@ -56,16 +57,15 @@ st.sidebar.markdown("""
 2. Click on "Start Typing".
 3. Type the text as shown.
 4. Click on "Finish Typing".
-                    
-### On the "WPM History"
-Check your improvments! 
 
-Copy wpm per minut column and keep track in an excel file                   
+### On the "WPM History"
+Check your improvements!
+
+Copy the WPM per minute column and keep track in an Excel file.
 """)
 
 # Page 1: Typing Practice
 if page == "Typing Practice":
-    # Page 1: Typing Practice
     st.markdown("<h1 style='text-align: center;'>TYPY</h1>", unsafe_allow_html=True)
     col1, col2 = st.columns([1, 1])  # Increase ratio to make col1 wider
 
@@ -76,10 +76,10 @@ if page == "Typing Practice":
             if uploaded_file.type == "text/plain":
                 uploaded_text = StringIO(uploaded_file.getvalue().decode("utf-8")).read()
             else:
-                import docx
                 doc = docx.Document(uploaded_file)
                 uploaded_text = "\n".join([para.text for para in doc.paragraphs])
-            stx.scrollableTextbox(uploaded_text, height=400, key="scroll_text")  # Adjust height
+            # Display the uploaded text in a scrollable HTML component
+            html(f"<div style='height: 400px; overflow-y: scroll;'>{uploaded_text}</div>", height=400, scrolling=True)
 
     with col2:
         if "start_time" not in st.session_state:
